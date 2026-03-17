@@ -1,5 +1,7 @@
 package com.pao.laboratory03.collections;
 
+import java.util.*;
+
 /**
  * Exercițiul 1 — Colecții: HashMap și TreeMap
  *
@@ -25,32 +27,46 @@ package com.pao.laboratory03.collections;
  *     Exemplu: "PAOJ" -> ["Ana", "Mihai", "Ion"], "BD" -> ["Ana", "Elena"]
  * 11. Afișează toți studenții de la materia "PAOJ".
  * 12. Adaugă un student nou la "BD" și afișează lista actualizată.
- *
- * Output așteptat (orientativ — ordinea HashMap poate varia):
- *
- * === PARTEA A: HashMap — frecvența cuvintelor ===
- * Frecvență: {python=2, c++=2, java=3, rust=1, go=1}
- * Conține 'rust'? true
- * Chei: [python, c++, java, rust, go]
- * Valori: [2, 2, 3, 1, 1]
- * python -> 2
- * c++ -> 2
- * java -> 3
- * rust -> 1
- * go -> 1
- *
- * === PARTEA B: TreeMap — sortare automată ===
- * Sortat: {c++=2, go=1, java=3, python=2, rust=1}
- * Prima cheie: c++
- * Ultima cheie: rust
- *
- * === PARTEA C: Map cu obiecte ===
- * Studenți la PAOJ: [Ana, Mihai, Ion]
- * Studenți la BD (actualizat): [Ana, Elena, George]
  */
 public class Main {
     public static void main(String[] args) {
-        // TODO: implementează cele 3 părți de mai sus
+
+        System.out.println("=== PARTEA A: HashMap — frecvența cuvintelor ===");
+
+        String[] words = {"java", "python", "java", "c++", "python", "java", "rust", "c++", "go"};
+
+        HashMap<String, Integer> frequencyMap = new HashMap<>();
+
+        for (String word : words) {
+            frequencyMap.put(word, frequencyMap.getOrDefault(word, 0) + 1);
+        }
+
+        System.out.println("Frecvență: " + frequencyMap);
+        System.out.println("Conține 'rust'? " + frequencyMap.containsKey("rust"));
+        System.out.println("Chei: " + frequencyMap.keySet());
+        System.out.println("Valori: " + frequencyMap.values());
+
+        for (Map.Entry<String, Integer> entry : frequencyMap.entrySet()) {
+            System.out.println(entry.getKey() + " -> " + entry.getValue());
+        }
+
+        System.out.println("\n=== PARTEA B: TreeMap — sortare automată ===");
+
+        TreeMap<String, Integer> sortedMap = new TreeMap<>(frequencyMap);
+
+        System.out.println("Sortat: " + sortedMap);
+        System.out.println("Prima cheie: " + sortedMap.firstKey());
+        System.out.println("Ultima cheie: " + sortedMap.lastKey());
+
+        System.out.println("\n=== PARTEA C: Map cu obiecte ===");
+
+        HashMap<String, List<String>> subjects = new HashMap<>();
+        subjects.put("PAOJ", new ArrayList<>(Arrays.asList("Ana", "Mihai", "Ion")));
+        subjects.put("BD", new ArrayList<>(Arrays.asList("Ana", "Elena")));
+
+        System.out.println("Studenți la PAOJ: " + subjects.get("PAOJ"));
+
+        subjects.get("BD").add("George");
+        System.out.println("Studenți la BD (actualizat): " + subjects.get("BD"));
     }
 }
-
