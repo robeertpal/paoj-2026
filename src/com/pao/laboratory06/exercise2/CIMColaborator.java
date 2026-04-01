@@ -1,20 +1,26 @@
 package com.pao.laboratory06.exercise2;
 
+import java.util.Scanner;
+
 public class CIMColaborator extends PersoanaFizica {
     private boolean bonus;
 
-    public CIMColaborator(String nume, String prenume, double venitBrutLunar, boolean bonus) {
-        super(nume, prenume, venitBrutLunar);
-        this.bonus = bonus;
+    public CIMColaborator() {
+        super(TipColaborator.CIM);
     }
 
     @Override
-    public double calculeazaVenitNetAnual() {
-        double rezultat = venitBrutLunar * 12 * 0.55;
-        if (bonus) {
-            rezultat *= 1.10;
+    public void citeste(Scanner in) {
+        this.nume = in.next();
+        this.prenume = in.next();
+        this.venitBrutLunar = in.nextDouble();
+
+        if (in.hasNext()) {
+            String bonusText = in.next();
+            this.bonus = bonusText.equalsIgnoreCase("DA");
+        } else {
+            this.bonus = false;
         }
-        return rezultat;
     }
 
     @Override
@@ -28,7 +34,11 @@ public class CIMColaborator extends PersoanaFizica {
     }
 
     @Override
-    public TipColaborator getTip() {
-        return TipColaborator.CIM;
+    public double calculeazaVenitNetAnual() {
+        double rezultat = venitBrutLunar * 12 * 0.55;
+        if (bonus) {
+            rezultat *= 1.10;
+        }
+        return rezultat;
     }
 }

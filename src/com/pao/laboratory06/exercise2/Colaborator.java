@@ -1,31 +1,32 @@
 package com.pao.laboratory06.exercise2;
 
-import java.util.Scanner;
-
 public abstract class Colaborator implements IOperatiiCitireScriere {
     protected String nume;
     protected String prenume;
     protected double venitBrutLunar;
+    protected TipColaborator tip;
 
-    public Colaborator() {
+    public Colaborator(TipColaborator tip) {
+        this.tip = tip;
     }
 
-    public Colaborator(String nume, String prenume, double venitBrutLunar) {
-        this.nume = nume;
-        this.prenume = prenume;
-        this.venitBrutLunar = venitBrutLunar;
+    public String getNume() {
+        return nume;
+    }
+
+    public String getPrenume() {
+        return prenume;
+    }
+
+    public double getVenitBrutLunar() {
+        return venitBrutLunar;
+    }
+
+    public TipColaborator getTip() {
+        return tip;
     }
 
     public abstract double calculeazaVenitNetAnual();
-
-    public abstract TipColaborator getTip();
-
-    @Override
-    public void citeste(Scanner in) {
-        this.nume = in.next();
-        this.prenume = in.next();
-        this.venitBrutLunar = in.nextDouble();
-    }
 
     @Override
     public void afiseaza() {

@@ -1,0 +1,12 @@
+STANDARD: 2004 Test4, valoare: 200.00 lei
+PRECOMANDA: 2002 Test2, valoare: 150.00 lei, livrare: 2026-07-01
+STANDARD: 2001 Test, valoare: 100.00 lei
+ABONAMENT: 2003 Test3, valoare: 75.00 lei, luni: 2
+
+Comanda cu valoarea maximă: STANDARD: 2004 Test4, valoare: 200.00 lei
+
+Sume și număr comenzi pe tip:
+STANDARD: suma = 300.00 lei, număr = 2
+PRECOMANDA: suma = 150.00 lei, număr = 1
+ABONAMENT: suma = 75.00 lei, număr = 1
+
