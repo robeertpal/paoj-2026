@@ -1,434 +1,215 @@
 package com.pao.laboratory07.exercise3;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.time.Month;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 public class Main {
-
     public static void main(String[] args) {
-        System.out.println("=== EXERCITIUL 3 BONUS - ANALIZA AVANSATA SI WORKFLOW-URI ===");
-        System.out.println();
+        System.out.println("=================================================");
+        System.out.println("EXERCIȚIUL 3 BONUS");
+        System.out.println("=================================================\n");
 
-        double pragValoare = 200.0;
-        if (args.length > 0) {
-            try {
-                pragValoare = Double.parseDouble(args[0]);
-            } catch (NumberFormatException e) {
-                System.out.println("[AVERTISMENT] Argument invalid pentru prag. Se foloseste pragul implicit: 200.0");
-            }
+        List<Order> orders = buildSampleOrders();
+
+        // 1. Afișare inițială comenzi
+        System.out.println("1) LISTA INIȚIALĂ DE COMENZI");
+        printOrders(orders);
+
+        // 2. Grupare după tip + media valorilor
+        System.out.println("\n2) MEDIA VALORILOR PE TIP DE COMANDĂ");
+        Map<OrderType, Double> avgByType = OrderAnalytics.averageValueByType(orders);
+        for (Map.Entry<OrderType, Double> entry : avgByType.entrySet()) {
+            System.out.printf("Tip: %-8s | Media valorilor: %.2f%n", entry.getKey(), entry.getValue());
         }
-        final double pragFinal = pragValoare;
 
-        List<Comanda> comenzi = new ArrayList<>();
+        // 3. Comenzi peste media tuturor comenzilor
+        System.out.println("\n3) COMENZI CU VALOARE PESTE MEDIA TUTUROR COMENZILOR");
+        double overallAverage = OrderAnalytics.overallAverageValue(orders);
+        System.out.printf("Media generală: %.2f%n", overallAverage);
+        List<Order> aboveAverageOrders = OrderAnalytics.ordersAboveOverallAverage(orders);
+        aboveAverageOrders.forEach(order -> System.out.println(" - " + order));
 
-        System.out.println("1. CREARE COMENZI SI VALIDARE");
-        System.out.println("--------------------------------");
+        // 4. Pentru fiecare comandă afișăm dacă este specială
+        System.out.println("\n4) VERIFICARE COMENZI SPECIALE");
+        for (Order order : orders) {
+            System.out.printf("Comanda #%d (%s) -> specială: %s | detalii: %s%n",
+                    order.getId(),
+                    order.getType(),
+                    order.isSpecial(),
+                    order.specialInfo());
+        }
+
+        // 5. Filtrare după prag dat ca argument sau implicit 500
+        double threshold = readThreshold(args);
+        System.out.println("\n5) FILTRARE DUPĂ PRAG");
+        System.out.printf("Prag folosit: %.2f%n", threshold);
+        List<Order> filteredOrders = OrderAnalytics.filterByMinValue(orders, threshold);
+        filteredOrders.forEach(order -> System.out.println(" - " + order));
+
+        // 6. Sortare după client, apoi după valoare
+        System.out.println("\n6) SORTARE DUPĂ CLIENT, APOI DUPĂ VALOARE");
+        List<Order> sortedOrders = OrderAnalytics.sortByClientThenValue(orders);
+        sortedOrders.forEach(order -> System.out.println(" - " + order));
+
+        // 7. Workflow automat: procesarea precomenzilor cu livrare depășită
+        System.out.println("\n7) WORKFLOW AUTOMAT - PRECOMENZI RESTANTE");
+        System.out.println("Înainte de procesare:");
+        orders.stream()
+                .filter(order -> order instanceof Preorder)
+                .forEach(System.out::println);
+
+        OrderWorkflowService.processOverduePreorders(orders);
+
+        System.out.println("După procesare:");
+        orders.stream()
+                .filter(order -> order instanceof Preorder)
+                .forEach(System.out::println);
+
+        // 8. Raport sumar pe tipuri
+        System.out.println("\n8) RAPORT SUMAR");
+        System.out.println(OrderAnalytics.summaryReport(orders));
+
+        // 9. Raport extra: total valoare pe lună
+        System.out.println("9) RAPORT EXTRA - TOTAL VALOARE PE LUNĂ");
+        Map<Month, Double> monthlyTotals = OrderAnalytics.totalValueByMonth(orders);
+        for (Map.Entry<Month, Double> entry : monthlyTotals.entrySet()) {
+            System.out.printf("%s -> %.2f%n", entry.getKey(), entry.getValue());
+        }
+
+        // 10. Raport extra: total valoare pe client
+        System.out.println("\n10) RAPORT EXTRA - TOTAL VALOARE PE CLIENT");
+        Map<String, Double> clientTotals = OrderAnalytics.totalValueByClient(orders);
+        for (Map.Entry<String, Double> entry : clientTotals.entrySet()) {
+            System.out.printf("%s -> %.2f%n", entry.getKey(), entry.getValue());
+        }
+
+        // 11. Export CSV
+        System.out.println("\n11) EXPORT CSV");
+        String csv = OrderWorkflowService.exportToCsv(orders);
+        System.out.println(csv);
+
+        // 12. Tratarea erorilor / cazuri limită
+        System.out.println("\n12) DEMONSTRARE ERORI ȘI CAZURI LIMITĂ");
+        demonstrateErrors();
+
+        System.out.println("\n=================================================");
+        System.out.println("DEMO FINALIZAT CU SUCCES");
+        System.out.println("=================================================");
+    }
+
+    private static List<Order> buildSampleOrders() {
+        List<Order> orders = new ArrayList<>();
+
+        orders.add(new StandardOrder(
+                1, "Ana Popescu", 250.0,
+                LocalDate.of(2026, 3, 10),
+                OrderStatus.PLACED
+        ));
+
+        orders.add(new ExpressOrder(
+                2, "Mihai Ionescu", 900.0,
+                LocalDate.of(2026, 3, 11),
+                OrderStatus.PROCESSING,
+                24
+        ));
+
+        orders.add(new Preorder(
+                3, "Ioana Georgescu", 1200.0,
+                LocalDate.of(2026, 2, 20),
+                OrderStatus.PLACED,
+                LocalDate.now().minusDays(5) // restantă
+        ));
+
+        orders.add(new BulkOrder(
+                4, "Firma Alpha SRL", 2500.0,
+                LocalDate.of(2026, 1, 18),
+                OrderStatus.SHIPPED,
+                40
+        ));
+
+        orders.add(new StandardOrder(
+                5, "Ana Popescu", 600.0,
+                LocalDate.of(2026, 4, 2),
+                OrderStatus.DELIVERED
+        ));
+
+        orders.add(new Preorder(
+                6, "Radu Marin", 700.0,
+                LocalDate.of(2026, 4, 1),
+                OrderStatus.PLACED,
+                LocalDate.now().plusDays(10) // încă nu e restantă
+        ));
+
+        orders.add(new ExpressOrder(
+                7, "Bianca Tudor", 450.0,
+                LocalDate.of(2026, 4, 4),
+                OrderStatus.PLACED,
+                12
+        ));
+
+        return orders;
+    }
+
+    private static void printOrders(List<Order> orders) {
+        for (Order order : orders) {
+            System.out.println(" - " + order);
+        }
+    }
+
+    private static double readThreshold(String[] args) {
+        double defaultThreshold = 500.0;
+
+        if (args == null || args.length == 0) {
+            System.out.println("Nu s-a primit argument în linia de comandă. Se folosește pragul implicit: 500.0");
+            return defaultThreshold;
+        }
 
         try {
-            comenzi.add(new ComandaStandard(1001, "Popescu", 250.0));
-            comenzi.add(new Precomanda(1002, "Ionescu", 400.0, "2025-05-10"));
-            comenzi.add(new ComandaAbonament(1003, "Georgescu", 120.0, 6));
-            comenzi.add(new ComandaStandard(1004, "Enache", 300.0));
-            comenzi.add(new Precomanda(1005, "Vasilescu", 500.0, "2027-06-01"));
-            comenzi.add(new ComandaAbonament(1006, "Pop", 90.0, 12));
-            comenzi.add(new Precomanda(1007, "Marin", 150.0, "2024-01-15"));
-            comenzi.add(new ComandaStandard(1008, "Andrei", 700.0));
-
-            for (Comanda c : comenzi) {
-                System.out.println("Adaugata: " + c + " | speciala = " + c.esteSpeciala());
-            }
-        } catch (DateException | ValidationException e) {
-            System.out.println("[EROARE LA CREARE] " + e.getMessage());
+            return Double.parseDouble(args[0]);
+        } catch (NumberFormatException e) {
+            System.out.println("Argument invalid pentru prag. Se folosește pragul implicit: 500.0");
+            return defaultThreshold;
         }
-
-        System.out.println();
-
-        System.out.println("2. DEMONSTRARE CAZURI LIMITA SI ERORI");
-        System.out.println("--------------------------------------");
-
-        incearcaCreare(() -> new ComandaStandard(2001, "", 100.0), "client gol");
-        incearcaCreare(() -> new ComandaStandard(2002, "Test", -50.0), "valoare negativa");
-        incearcaCreare(() -> new Precomanda(2003, "Test2", 100.0, "data-gresita"), "data invalida");
-        incearcaCreare(() -> new ComandaAbonament(2004, "Test3", 100.0, 0), "numar luni invalid");
-
-        System.out.println();
-
-        System.out.println("3. AFISARE SI PROCESARE POLIMORFICA");
-        System.out.println("-----------------------------------");
-        for (Comanda c : comenzi) {
-            c.proceseaza();
-        }
-
-        System.out.println();
-
-        System.out.println("4. GRUPARE DUPA TIP SI MEDIA VALORILOR");
-        System.out.println("--------------------------------------");
-
-        Map<String, Double> mediiPeTip = comenzi.stream()
-                .collect(Collectors.groupingBy(
-                        Comanda::tipComanda,
-                        LinkedHashMap::new,
-                        Collectors.averagingDouble(Comanda::getValoare)
-                ));
-
-        for (Map.Entry<String, Double> entry : mediiPeTip.entrySet()) {
-            System.out.printf("%s -> media valorilor: %.2f lei%n", entry.getKey(), entry.getValue());
-        }
-
-        System.out.println();
-
-        System.out.println("5. COMENZI CU VALOARE PESTE MEDIA TUTUROR COMENZILOR");
-        System.out.println("----------------------------------------------------");
-
-        double mediaTotala = comenzi.stream()
-                .mapToDouble(Comanda::getValoare)
-                .average()
-                .orElse(0.0);
-
-        System.out.printf("Media tuturor comenzilor: %.2f lei%n", mediaTotala);
-
-        List<Comanda> pesteMedie = comenzi.stream()
-                .filter(c -> c.getValoare() > mediaTotala)
-                .toList();
-
-        if (pesteMedie.isEmpty()) {
-            System.out.println("Nu exista comenzi peste media generala.");
-        } else {
-            for (Comanda c : pesteMedie) {
-                System.out.println(c);
-            }
-        }
-
-        System.out.println();
-
-        System.out.println("6. FILTRARE DUPA PRAG DE VALOARE");
-        System.out.println("--------------------------------");
-        System.out.printf("Prag folosit: %.2f lei%n", pragFinal);
-
-        List<Comanda> filtrate = comenzi.stream()
-                .filter(c -> c.getValoare() >= pragFinal)
-                .toList();
-
-        if (filtrate.isEmpty()) {
-            System.out.println("Nu exista comenzi care sa respecte pragul.");
-        } else {
-            for (Comanda c : filtrate) {
-                System.out.println(c);
-            }
-        }
-
-        System.out.println();
-
-        System.out.println("7. SORTARE DUPA CLIENT, APOI DUPA VALOARE");
-        System.out.println("-----------------------------------------");
-
-        List<Comanda> sortate = new ArrayList<>(comenzi);
-        sortate.sort(
-                Comparator.comparing(Comanda::getClient)
-                        .thenComparing(Comanda::getValoare)
-        );
-
-        for (Comanda c : sortate) {
-            System.out.println(c);
-        }
-
-        System.out.println();
-
-        System.out.println("8. WORKFLOW AUTOMAT - PRECOMENZI CU LIVRARE DEPASITA");
-        System.out.println("----------------------------------------------------");
-
-        List<Precomanda> precomenziDepasite = comenzi.stream()
-                .filter(c -> c instanceof Precomanda)
-                .map(c -> (Precomanda) c)
-                .filter(Precomanda::areLivrareDepasita)
-                .toList();
-
-        if (precomenziDepasite.isEmpty()) {
-            System.out.println("Nu exista precomenzi cu termen depasit.");
-        } else {
-            for (Precomanda p : precomenziDepasite) {
-                System.out.println("NOTIFICARE: precomanda intarziata -> " + p);
-            }
-        }
-
-        System.out.println();
-
-        System.out.println("9. RAPORT SUMAR PE TIP DE COMANDA");
-        System.out.println("---------------------------------");
-
-        raportPeTip(comenzi);
-
-        System.out.println();
-
-        System.out.println("10. EXPORT CSV (SIMULARE)");
-        System.out.println("-------------------------");
-        System.out.println(genereazaCSV(comenzi));
-
-        System.out.println("=== SFARSIT DEMONSTRATIE ===");
     }
 
-    private static void incearcaCreare(CommandFactory factory, String descriere) {
+    private static void demonstrateErrors() {
         try {
-            factory.create();
-            System.out.println("[NEASTEPTAT] Nu a aparut eroare pentru cazul: " + descriere);
-        } catch (Exception e) {
-            System.out.println("[OK] Eroare tratata pentru " + descriere + ": " + e.getMessage());
-        }
-    }
-
-    private static void raportPeTip(List<Comanda> comenzi) {
-        Map<String, List<Comanda>> grupate = comenzi.stream()
-                .collect(Collectors.groupingBy(Comanda::tipComanda, LinkedHashMap::new, Collectors.toList()));
-
-        for (Map.Entry<String, List<Comanda>> entry : grupate.entrySet()) {
-            String tip = entry.getKey();
-            List<Comanda> lista = entry.getValue();
-
-            double suma = lista.stream().mapToDouble(Comanda::getValoare).sum();
-            double media = lista.stream().mapToDouble(Comanda::getValoare).average().orElse(0.0);
-            long speciale = lista.stream().filter(Comanda::esteSpeciala).count();
-
-            System.out.printf(
-                    "%s -> numar: %d, suma: %.2f lei, media: %.2f lei, speciale: %d%n",
-                    tip, lista.size(), suma, media, speciale
-            );
-        }
-    }
-
-    private static String genereazaCSV(List<Comanda> comenzi) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("tip,id,client,valoare,speciala,detalii\n");
-
-        for (Comanda c : comenzi) {
-            sb.append(c.tipComanda()).append(",")
-                    .append(c.getId()).append(",")
-                    .append(c.getClient()).append(",")
-                    .append(String.format(Locale.US, "%.2f", c.getValoare())).append(",")
-                    .append(c.esteSpeciala()).append(",")
-                    .append(c.detaliiCSV())
-                    .append("\n");
+            new StandardOrder(0, "Client Invalid", 100, LocalDate.now(), OrderStatus.PLACED);
+        } catch (InvalidOrderDataException e) {
+            System.out.println("Eroare capturată (id invalid): " + e.getMessage());
         }
 
-        return sb.toString();
-    }
-
-    @FunctionalInterface
-    interface CommandFactory {
-        Comanda create() throws Exception;
-    }
-
-    interface ActiuneComanda {
-        void proceseaza();
-        void afiseaza();
-        String tipComanda();
-
-        default boolean esteSpeciala() {
-            return false;
-        }
-    }
-
-    enum TipComanda {
-        STANDARD,
-        PRECOMANDA,
-        ABONAMENT
-    }
-
-    static class ValidationException extends Exception {
-        public ValidationException(String message) {
-            super(message);
-        }
-    }
-
-    static class DateException extends Exception {
-        public DateException(String message) {
-            super(message);
-        }
-    }
-
-    static abstract sealed class Comanda implements ActiuneComanda
-            permits ComandaStandard, Precomanda, ComandaAbonament {
-
-        protected int id;
-        protected String client;
-        protected double valoare;
-
-        public Comanda(int id, String client, double valoare) throws ValidationException {
-            valideazaId(id);
-            valideazaClient(client);
-            valideazaValoare(valoare);
-
-            this.id = id;
-            this.client = client;
-            this.valoare = valoare;
+        try {
+            new StandardOrder(10, "", 100, LocalDate.now(), OrderStatus.PLACED);
+        } catch (InvalidOrderDataException e) {
+            System.out.println("Eroare capturată (nume client invalid): " + e.getMessage());
         }
 
-        public int getId() {
-            return id;
+        try {
+            new StandardOrder(11, "Client X", -10, LocalDate.now(), OrderStatus.PLACED);
+        } catch (InvalidOrderDataException e) {
+            System.out.println("Eroare capturată (valoare negativă): " + e.getMessage());
         }
 
-        public String getClient() {
-            return client;
+        try {
+            OrderType.fromString("mystery");
+        } catch (UnknownOrderTypeException e) {
+            System.out.println("Eroare capturată (tip necunoscut): " + e.getMessage());
         }
 
-        public double getValoare() {
-            return valoare;
+        try {
+            OrderAnalytics.filterByMinValue(buildSampleOrders(), -5);
+        } catch (InvalidOrderDataException e) {
+            System.out.println("Eroare capturată (prag negativ): " + e.getMessage());
         }
 
-        protected void valideazaId(int id) throws ValidationException {
-            if (id <= 0) {
-                throw new ValidationException("ID invalid: trebuie sa fie pozitiv.");
-            }
-        }
-
-        protected void valideazaClient(String client) throws ValidationException {
-            if (client == null || client.isBlank()) {
-                throw new ValidationException("Numele clientului nu poate fi gol.");
-            }
-        }
-
-        protected void valideazaValoare(double valoare) throws ValidationException {
-            if (valoare <= 0) {
-                throw new ValidationException("Valoarea comenzii trebuie sa fie pozitiva.");
-            }
-        }
-
-        public abstract String detaliiCSV();
-    }
-
-    static final class ComandaStandard extends Comanda {
-
-        public ComandaStandard(int id, String client, double valoare) throws ValidationException {
-            super(id, client, valoare);
-        }
-
-        @Override
-        public void proceseaza() {
-            System.out.println("[PROCESARE STANDARD] " + this);
-        }
-
-        @Override
-        public void afiseaza() {
-            System.out.println(this);
-        }
-
-        @Override
-        public String tipComanda() {
-            return TipComanda.STANDARD.name();
-        }
-
-        @Override
-        public String detaliiCSV() {
-            return "fara_detalii_suplimentare";
-        }
-
-        @Override
-        public String toString() {
-            return String.format("STANDARD: %d %s, valoare: %.2f lei", id, client, valoare);
-        }
-    }
-
-    static final class Precomanda extends Comanda {
-
-        private LocalDate dataLivrare;
-
-        public Precomanda(int id, String client, double valoare, String dataLivrare)
-                throws ValidationException, DateException {
-            super(id, client, valoare);
-            this.dataLivrare = parseazaData(dataLivrare);
-        }
-
-        private LocalDate parseazaData(String data) throws DateException {
-            try {
-                return LocalDate.parse(data);
-            } catch (DateTimeParseException e) {
-                throw new DateException("Data de livrare invalida: " + data);
-            }
-        }
-
-        public boolean areLivrareDepasita() {
-            return dataLivrare.isBefore(LocalDate.now());
-        }
-
-        @Override
-        public void proceseaza() {
-            System.out.println("[PROCESARE PRECOMANDA] " + this);
-        }
-
-        @Override
-        public void afiseaza() {
-            System.out.println(this);
-        }
-
-        @Override
-        public String tipComanda() {
-            return TipComanda.PRECOMANDA.name();
-        }
-
-        @Override
-        public boolean esteSpeciala() {
-            return true;
-        }
-
-        @Override
-        public String detaliiCSV() {
-            return "livrare=" + dataLivrare;
-        }
-
-        @Override
-        public String toString() {
-            return String.format(
-                    "PRECOMANDA: %d %s, valoare: %.2f lei, livrare: %s",
-                    id, client, valoare, dataLivrare
-            );
-        }
-    }
-
-    static final class ComandaAbonament extends Comanda {
-
-        private int nrLuni;
-
-        public ComandaAbonament(int id, String client, double valoare, int nrLuni)
-                throws ValidationException {
-            super(id, client, valoare);
-            if (nrLuni <= 0) {
-                throw new ValidationException("Numarul de luni trebuie sa fie pozitiv.");
-            }
-            this.nrLuni = nrLuni;
-        }
-
-        @Override
-        public void proceseaza() {
-            System.out.println("[PROCESARE ABONAMENT] " + this);
-        }
-
-        @Override
-        public void afiseaza() {
-            System.out.println(this);
-        }
-
-        @Override
-        public String tipComanda() {
-            return TipComanda.ABONAMENT.name();
-        }
-
-        @Override
-        public boolean esteSpeciala() {
-            return true;
-        }
-
-        @Override
-        public String detaliiCSV() {
-            return "luni=" + nrLuni;
-        }
-
-        @Override
-        public String toString() {
-            return String.format(
-                    "ABONAMENT: %d %s, valoare: %.2f lei, luni: %d",
-                    id, client, valoare, nrLuni
-            );
+        try {
+            OrderAnalytics.overallAverageValue(List.of());
+        } catch (InvalidOrderDataException e) {
+            System.out.println("Eroare capturată (listă goală): " + e.getMessage());
         }
     }
 }
