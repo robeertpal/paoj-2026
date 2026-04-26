@@ -72,7 +72,8 @@ public class Comanda {
         return "Comanda\n" +
                 "  ID: " + id + "\n" +
                 "  Client ID: " + clientId + "\n" +
-                "  Bilete: " + bileteText + "\n" +
+                "  ID bilete: " + bileteText + "\n" +
+                "  Numar bilete: " + ticketIds.length + "\n" +
                 "  Total: " + total + "\n" +
                 "  Timestamp: " + timestamp;
     }
