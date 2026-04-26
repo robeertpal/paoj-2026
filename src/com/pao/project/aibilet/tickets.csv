@@ -1,0 +1,5 @@
+id;tip;codBilet;evenimentId;clientId;seatCode;pret;status
+1;VIP;UN-1024;1;4;;1999.99;FOLOSIT
+2;VIP;UN-1025;1;4;;1999.99;PLATIT
+3;VIP;TH-1024;2;4;A5;250.0;PLATIT
+4;VIP;TH-1025;2;4;A6;250.0;PLATIT

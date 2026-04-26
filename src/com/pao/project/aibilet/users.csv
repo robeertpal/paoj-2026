@@ -1,0 +1,6 @@
+id;rol;username;parola;nume;prenume;email;telefon;extra
+1;ADMIN;admin;admin;Pal;Robert-Attila;robert@aibilet.ro;0265283188;
+2;ORGANIZATOR;andrei;andrei;Munteanu;Andrei;andrei@untold.com;0752172618;UNTOLD
+3;ORGANIZATOR;david;david;Ardelean;David;david@themotans.ro;0757628732;THE MOTANS
+4;CLIENT;angelo;angelo;Eremia;Angelo;angelo@icloud.com;076282732;
+5;AGENT_CHECK_IN;Alex;alex;Moldovan;Alex;alex@gmail.com;077672176;
