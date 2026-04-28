@@ -3,19 +3,24 @@ package com.pao.test;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.stream.Collectors;
+
+import com.github.difflib.DiffUtils;
+import com.github.difflib.UnifiedDiffUtils;
+import com.github.difflib.patch.Patch;
 
 /**
  * Utilitar pentru testarea automată a exercițiilor I/O.
- *
+ * <p>
  * Folosire dintr-un Test.java al unui exercițiu:
- *   IOTest.runParts("src/com/pao/laboratoryNN/exerciseM/tests", Main::main);
- *
+ * IOTest.runParts("src/com/pao/laboratoryNN/exerciseM/tests", Main::main);
+ * <p>
  * Convenție directoare de test:
- *   tests/partA/1.in  → input furnizat la System.in pentru Partea A, testul 1
- *   tests/partA/1.out → output așteptat (comparație exactă, fără spații finale)
- *   tests/partB/1.in, tests/partB/1.out, ... pentru Partea B
- *   ... și tot așa pentru partC, partD etc.
- *
+ * tests/partA/1.in  → input furnizat la System.in pentru Partea A, testul 1
+ * tests/partA/1.out → output așteptat (comparație exactă, fără spații finale)
+ * tests/partB/1.in, tests/partB/1.out, ... pentru Partea B
+ * ... și tot așa pentru partC, partD etc.
+ * <p>
  * Fișierele .in și .out trebuie să aibă același prefix numeric (e.g. 1.in / 1.out).
  * Subdirectoarele sunt procesate în ordine alfabetică.
  */
@@ -35,6 +40,19 @@ public class IOTest {
      * @param main     referință la Main::main al exercițiului testat
      */
     public static void runParts(String testsDir, MainMethod main) {
+        runParts(testsDir, main, false);
+    }
+
+    /**
+     * Rulează testele din toate subdirectoarele partX/ ale directorului dat.
+     * Fiecare subdirector este o "parte" a exercițiului și primește propriul header și sumar.
+     * La final se afișează un tabel combinat cu rezultatele tuturor părților.
+     *
+     * @param testsDir        calea relativă la rădăcina proiectului (e.g. "src/com/pao/laboratory06/exercise1/tests")
+     * @param main            referință la Main::main al exercițiului testat
+     * @param printFullOutput dacă să se afișeze outputul complet (expected/actual) la testele eșuate
+     */
+    public static void runParts(String testsDir, MainMethod main, boolean printFullOutput) {
         File dir = new File(testsDir);
         if (!dir.exists() || !dir.isDirectory()) {
             System.out.println("EROARE: directorul de teste nu există: " + dir.getAbsolutePath());
@@ -45,8 +63,8 @@ public class IOTest {
         File[] all = dir.listFiles();
         File[] partDirs = (all == null) ? new File[0]
                 : Arrays.stream(all)
-                        .filter(f -> f.isDirectory())
-                        .toArray(File[]::new);
+                  .filter(f -> f.isDirectory())
+                  .toArray(File[]::new);
         Arrays.sort(partDirs, Comparator.comparing(File::getName));
 
         if (partDirs.length == 0) {
@@ -56,18 +74,18 @@ public class IOTest {
         }
 
         // Rezultate per parte pentru tabelul final
-        List<String>  partNames   = new ArrayList<>();
-        List<Integer> partPassed  = new ArrayList<>();
-        List<Integer> partTotal   = new ArrayList<>();
+        List<String> partNames = new ArrayList<>();
+        List<Integer> partPassed = new ArrayList<>();
+        List<Integer> partTotal = new ArrayList<>();
 
         for (File partDir : partDirs) {
             String partName = partDir.getName();
             System.out.println();
             System.out.println("╔══════════════════════════════════════════════════════════════╗");
-            System.out.printf( "║  Partea: %-52s║%n", partName);
+            System.out.printf("║  Partea: %-52s║%n", partName);
             System.out.println("╚══════════════════════════════════════════════════════════════╝");
 
-            int[] results = runPartDir(partDir, main);
+            int[] results = runPartDir(partDir, main, printFullOutput);
             partNames.add(partName);
             partPassed.add(results[0]);
             partTotal.add(results[1]);
@@ -81,7 +99,7 @@ public class IOTest {
         int totalP = 0, totalT = 0;
         for (int i = 0; i < partNames.size(); i++) {
             int p = partPassed.get(i), t = partTotal.get(i);
-            String status = (p == t && t > 0) ? "✓" : (p == 0 ? "✗" : "~");
+            String status = (p == t && t > 0) ? "[OK]" : (p == 0 ? "[FAIL]" : "[PARTIAL]");
             System.out.printf("  %s  %-10s  %d/%d teste%n", status, partNames.get(i), p, t);
             totalP += p;
             totalT += t;
@@ -100,27 +118,83 @@ public class IOTest {
      * @param main     referință la Main::main
      */
     public static void runPart(String testsDir, String partName, MainMethod main) {
+        runPart(testsDir, partName, main, false);
+    }
+
+    /**
+     * Rulează testele dintr-o singură parte (subdirector), cu opțiune de afișare completă output.
+     *
+     * @param testsDir        calea relativă la directorul tests/
+     * @param partName        numele subdirectorului (e.g. "partA")
+     * @param main            referință la Main::main
+     * @param printFullOutput dacă să se afișeze outputul complet (expected/actual) la testele eșuate
+     */
+    public static void runPart(String testsDir, String partName, MainMethod main, boolean printFullOutput) {
         File partDir = new File(testsDir, partName);
         if (!partDir.exists() || !partDir.isDirectory()) {
             System.out.println("EROARE: directorul de parte nu există: " + partDir.getAbsolutePath());
             return;
         }
+        // delete old diffs for this part
+        File resultsDir = new File(partDir, "../../results").getAbsoluteFile();
+        if (resultsDir.exists()) {
+            File[] oldDiffs = resultsDir.listFiles((d, name) -> name.startsWith(partName + "-") && name.endsWith(".diff"));
+            if (oldDiffs != null) {
+                for (File f : oldDiffs) f.delete();
+            }
+        }
         System.out.println();
         System.out.println("╔══════════════════════════════════════════════════════════════╗");
-        System.out.printf( "║  Partea: %-52s║%n", partName);
+        System.out.printf("║  Partea: %-52s║%n", partName);
         System.out.println("╚══════════════════════════════════════════════════════════════╝");
-        int[] results = runPartDir(partDir, main);
+        int[] results = runPartDir(partDir, main, printFullOutput);
         System.out.println();
         System.out.printf("Rezultat %s: %d/%d teste trecute.%n", partName, results[0], results[1]);
+    }
+
+    /**
+     * Rulează testele direct dintr-un director plat (fără subdirectoare partX/).
+     * Fișierele .in și .out trebuie să fie direct în directorul dat.
+     *
+     * @param testsDir calea relativă la rădăcina proiectului (e.g. "src/com/pao/laboratory07/exercise2/tests")
+     * @param main     referință la Main::main al exercițiului testat
+     */
+    public static void runFlat(String testsDir, MainMethod main) {
+        runFlat(testsDir, main, false);
+    }
+
+    /**
+     * Rulează testele direct dintr-un director plat (fără subdirectoare partX/), cu opțiune de afișare completă.
+     *
+     * @param testsDir        calea relativă la rădăcina proiectului
+     * @param main            referință la Main::main al exercițiului testat
+     * @param printFullOutput dacă să se afișeze outputul complet la testele eșuate
+     */
+    public static void runFlat(String testsDir, MainMethod main, boolean printFullOutput) {
+        File dir = new File(testsDir);
+        if (!dir.exists() || !dir.isDirectory()) {
+            System.out.println("EROARE: directorul de teste nu există: " + dir.getAbsolutePath());
+            return;
+        }
+        System.out.println();
+        System.out.println("╔══════════════════════════════════════════════════════════════╗");
+        System.out.printf("║  Teste: %-53s║%n", testsDir);
+        System.out.println("╚══════════════════════════════════════════════════════════════╝");
+        int[] results = runPartDir(dir, main, printFullOutput);
+        System.out.println();
+        System.out.println("══════════════════════════════════════════════════════════════");
+        System.out.printf("  Total: %d/%d teste trecute%n", results[0], results[1]);
+        System.out.println("══════════════════════════════════════════════════════════════");
     }
 
     // ── Internal helpers ─────────────────────────────────────────────────────
 
     /**
      * Rulează toate testele (.in/.out) dintr-un singur director de parte.
+     *
      * @return int[]{passed, total}
      */
-    private static int[] runPartDir(File dir, MainMethod main) {
+    private static int[] runPartDir(File dir, MainMethod main, boolean printFullOutput) {
         File[] all = dir.listFiles();
         File[] inFiles = (all == null) ? new File[0]
                 : Arrays.stream(all).filter(f -> f.getName().endsWith(".in")).toArray(File[]::new);
@@ -148,7 +222,7 @@ public class IOTest {
 
             String input, expected;
             try {
-                input    = Files.readString(inFile.toPath()).replace("\r\n", "\n");
+                input = Files.readString(inFile.toPath()).replace("\r\n", "\n");
                 expected = Files.readString(outFile.toPath()).stripTrailing().replace("\r\n", "\n");
             } catch (IOException e) {
                 System.out.println("  [ERROR] " + base + " — nu s-a putut citi: " + e.getMessage());
@@ -157,17 +231,23 @@ public class IOTest {
                 continue;
             }
 
-            System.out.println();
-            System.out.println("  Input:");
-            System.out.println("  ---");
-            if (input.isEmpty()) System.out.println("  (empty)");
-            else { for (String l : input.split("\n", -1)) System.out.println("  " + l); }
-            System.out.println("  ---");
-            System.out.println("  Expected:");
-            System.out.println("  ---");
-            if (expected.isEmpty()) System.out.println("  (empty)");
-            else { for (String l : expected.split("\n", -1)) System.out.println("  " + l); }
-            System.out.println("  ---");
+            if (printFullOutput) {
+                System.out.println();
+                System.out.println("  Input:");
+                System.out.println("  ---");
+                if (input.isEmpty()) System.out.println("  (empty)");
+                else {
+                    for (String l : input.split("\n", -1)) System.out.println("  " + l);
+                }
+                System.out.println("  ---");
+                System.out.println("  Expected:");
+                System.out.println("  ---");
+                if (expected.isEmpty()) System.out.println("  (empty)");
+                else {
+                    for (String l : expected.split("\n", -1)) System.out.println("  " + l);
+                }
+                System.out.println("  ---");
+            }
 
             String actual = capture(input, main);
             if (actual == null) {
@@ -179,13 +259,6 @@ public class IOTest {
             }
             actual = actual.stripTrailing().replace("\r\n", "\n");
 
-            System.out.println();
-            System.out.println("  Actual:");
-            System.out.println("  ---");
-            if (actual.isEmpty()) System.out.println("  (empty)");
-            else { for (String l : actual.split("\n", -1)) System.out.println("  " + l); }
-            System.out.println("  ---");
-
             if (actual.equals(expected)) {
                 System.out.println("  [PASS] " + base);
                 System.out.println();
@@ -194,7 +267,16 @@ public class IOTest {
             } else {
                 System.out.println("  [FAIL] " + base);
                 System.out.println();
-                printDiff(expected, actual);
+                if (printFullOutput) {
+                    System.out.println("  Actual:");
+                    System.out.println("  ---");
+                    if (actual.isEmpty()) System.out.println("  (empty)");
+                    else {
+                        for (String l : actual.split("\n", -1)) System.out.println("  " + l);
+                    }
+                    System.out.println("  ---");
+                }
+                printUnifiedDiff(expected, actual, dir, base);
                 System.out.println();
                 System.out.println("  -------------------------------------------------------------");
                 failed++;
@@ -206,9 +288,14 @@ public class IOTest {
         return new int[]{passed, passed + failed};
     }
 
+    // Overload for backward compatibility
+    private static int[] runPartDir(File dir, MainMethod main) {
+        return runPartDir(dir, main, false);
+    }
+
     private static String capture(String input, MainMethod main) {
-        InputStream  savedIn  = System.in;
-        PrintStream  savedOut = System.out;
+        InputStream savedIn = System.in;
+        PrintStream savedOut = System.out;
         try {
             System.setIn(new ByteArrayInputStream(input.getBytes()));
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -227,109 +314,33 @@ public class IOTest {
         }
     }
 
-    private static void printDiff(String expected, String actual) {
-        String[] expLines = expected.replace("\r\n", "\n").split("\n", -1);
-        String[] actLines = actual.replace("\r\n", "\n").split("\n", -1);
-
-        int n = expLines.length, m = actLines.length;
-        int[][] lcs = new int[n + 1][m + 1];
-        for (int i = n - 1; i >= 0; i--) {
-            for (int j = m - 1; j >= 0; j--) {
-                if (expLines[i].equals(actLines[j])) lcs[i][j] = lcs[i + 1][j + 1] + 1;
-                else lcs[i][j] = Math.max(lcs[i + 1][j], lcs[i][j + 1]);
-            }
+    // Print and save unified diff using java-diff-utils
+    private static void printUnifiedDiff(String expected, String actual, File partDir, String base) {
+        List<String> expectedLines = Arrays.asList(expected.split("\n", -1));
+        List<String> actualLines = Arrays.asList(actual.split("\n", -1));
+        Patch<String> patch = DiffUtils.diff(expectedLines, actualLines);
+        List<String> unifiedDiff = UnifiedDiffUtils.generateUnifiedDiff(
+                "expected", "actual", expectedLines, patch, 3);
+        // Print to console
+        System.out.println("  ╔═══ Diff ═══════════════");
+        System.out.println("  ║");
+        for (String line : unifiedDiff) {
+            System.out.println("  ║    " + line);
         }
-
-        class Op { int type; String line; }
-        List<Op> ops = new ArrayList<>();
-        int i = 0, j = 0;
-        while (i < n && j < m) {
-            if (expLines[i].equals(actLines[j])) {
-                Op o = new Op(); o.type = 0; o.line = expLines[i]; ops.add(o); i++; j++;
-            } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
-                Op o = new Op(); o.type = 1; o.line = expLines[i]; ops.add(o); i++;
-            } else {
-                Op o = new Op(); o.type = 2; o.line = actLines[j]; ops.add(o); j++;
+        System.out.println("  ║");
+        System.out.println("  ╚═══ END of Diff ════════");
+        // Save to results/partX-Y.diff
+        File resultsDir = new File( partDir, "../../results").getAbsoluteFile();
+        if (!resultsDir.exists()) resultsDir.mkdirs();
+        String partName = partDir.getName();
+        File diffFile = new File(resultsDir, partName + "-" + base + ".diff");
+        if (diffFile.exists()) diffFile.delete();
+        try (PrintWriter pw = new PrintWriter(diffFile, "UTF-8")) {
+            for (String line : unifiedDiff) {
+                pw.println(line);
             }
-        }
-        while (i < n) { Op o = new Op(); o.type = 1; o.line = expLines[i++]; ops.add(o); }
-        while (j < m) { Op o = new Op(); o.type = 2; o.line = actLines[j++]; ops.add(o); }
-
-        final int CONTEXT = 3;
-        List<int[]> hunks = new ArrayList<>();
-
-        int idx = 0;
-        while (idx < ops.size()) {
-            while (idx < ops.size() && ops.get(idx).type == 0) idx++;
-            if (idx >= ops.size()) break;
-            int hStart = Math.max(0, idx - CONTEXT);
-            int hEnd = idx;
-            while (hEnd < ops.size() && ops.get(hEnd).type != 0) hEnd++;
-            hEnd = Math.min(ops.size(), hEnd + CONTEXT);
-            if (!hunks.isEmpty()) {
-                int[] last = hunks.get(hunks.size() - 1);
-                if (hStart <= last[1]) { last[1] = hEnd; }
-                else { hunks.add(new int[]{hStart, hEnd}); }
-            } else {
-                hunks.add(new int[]{hStart, hEnd});
-            }
-            idx = hEnd;
-        }
-
-        if (hunks.isEmpty()) {
-            System.out.println("    (diferență, dar nu s-au generat hunk-uri)");
-            for (int k = 0; k < Math.min(10, ops.size()); k++) {
-                Op o = ops.get(k);
-                String prefix = o.type == 0 ? " " : (o.type == 1 ? "-" : "+");
-                System.out.println("      " + prefix + " " + o.line);
-            }
-            return;
-        }
-
-        java.util.function.Function<String,String> esc = s -> s
-            .replace("\\", "\\\\").replace("\"", "\\\"")
-            .replace("\n", "\\n").replace("\t", "\\t");
-
-        boolean firstHunk = true;
-        for (int[] h : hunks) {
-            if (!firstHunk) System.out.println("  ---");
-            firstHunk = false;
-
-            int s = h[0], e = h[1];
-            int expStartLine = 1, actStartLine = 1;
-            int expCount = 0, actCount = 0;
-            for (int k = 0; k < s; k++) {
-                Op o = ops.get(k);
-                if (o.type == 0 || o.type == 1) expStartLine++;
-                if (o.type == 0 || o.type == 2) actStartLine++;
-            }
-            for (int k = s; k < e; k++) {
-                Op o = ops.get(k);
-                if (o.type == 0 || o.type == 1) expCount++;
-                if (o.type == 0 || o.type == 2) actCount++;
-            }
-            System.out.printf("    @@ -%d,%d +%d,%d @@%n", expStartLine, Math.max(1, expCount), actStartLine, Math.max(1, actCount));
-            StringBuilder expBlock = new StringBuilder();
-            StringBuilder actBlock = new StringBuilder();
-            for (int k = s; k < e; k++) {
-                Op o = ops.get(k);
-                String prefix = " ";
-                if (o.type == 1) prefix = "-"; else if (o.type == 2) prefix = "+";
-                System.out.println("      " + prefix + " " + o.line);
-                if (o.type == 0 || o.type == 1) { if (expBlock.length() > 0) expBlock.append('\n'); expBlock.append(o.line); }
-                if (o.type == 0 || o.type == 2) { if (actBlock.length() > 0) actBlock.append('\n'); actBlock.append(o.line); }
-            }
-            String expStr = expBlock.toString();
-            String actStr = actBlock.toString();
-            if (!expStr.equals(actStr)) {
-                System.out.println();
-                String compactAct = actStr.isEmpty() ? "(empty)" : esc.apply(actStr);
-                String compactExp = expStr.isEmpty() ? "(empty)" : esc.apply(expStr);
-                System.out.println("      (Found \"" + compactAct + "\" instead of \"" + compactExp + "\")");
-            }
-        }
-        if (hunks.size() > 3) {
-            System.out.println("    (... mai multe hunks: " + hunks.size() + ")");
+        } catch (IOException e) {
+            System.out.println("    [Eroare la scrierea fișierului diff: " + diffFile.getAbsolutePath() + "]");
         }
     }
 }
